@@ -10,46 +10,54 @@ void delayMs(int delay);
 
 int main(void)
 {
-	USART2_Init();
-	
+	// enable USART2 clock, bit 17 on APB1ENR
+	RCC->APB1ENR |= (1 << 17);
+
+	// enable GPIOA clock, bit 0 on AHB1ENR
+	RCC->AHB1ENR |= (1 << 0);
+
+	// set pin modes as alternate mode 7 (pins 2 and 3)
+	GPIOA->MODER &= 0xFFFFFF0F; // Reset bits 10-15 to clear old values
+	GPIOA->MODER |= 0x000000A0; // Set pin 2/3 to alternate func. mode (0b10)
+
+	// set pin modes as high speed
+	GPIOA->OSPEEDR |= 0x000000A0; // Set pin 2/3 to high speed mode (0b10)
+
+	// choose AF7 for USART2 in Alternate Function registers
+	GPIOA->AFR[0] |= (0x7 << 8); // for pin 2
+	GPIOA->AFR[0] |= (0x7 << 12); // for pin 3
+
+	// usart2 word length M, bit 12
+	//USART2->CR1 |= (0 << 12); // 0 - 1,8,n
+
+	// usart2 parity control, bit 9
+	//USART2->CR1 |= (0 << 9); // 0 - no parity
+
+	// usart2 tx enable, TE bit 3
+	USART2->CR1 |= (1 << 3);
+
+	// usart2 rx enable, RE bit 2
+	USART2->CR1 |= (1 << 2);
+
+
+	USART2->BRR = 0x008B;
+
+	// enable usart2 - UE, bit 13
+	USART2->CR1 |= (1 << 13);
+
+	const uint8_t brand[] = "testing uart\n\r";
+
 	while(1)
 	{
-		USART_write('H');
-		USART_write('i');
-		USART_write('\r');
-		USART_write('\n');
-		delayMs(1000);
+		for (uint32_t i=0; i<sizeof(brand); i++){
+			// send character
+			USART2->DR = brand[i];
+			// wait for transmit complete
+			while(!(USART2->SR & (1 << 6)));
+			// slow down
+			for(int i=0; i<1000000; i++);
+		}
 	}
-	
-}
 
-void USART2_Init(void)
-{
-	RCC->APB1ENR |= 0x20000; 	// Enable clock usart 2 in APB1
-	RCC->AHB1ENR |= 1;    		// Enable clock fot PA
-	
-	GPIOA->AFR[0] = 0x0700;		// In AFRL set PA2 as AF7
-	GPIOA->MODER  |= 0x0020; 	// Set PA2 to alternate function
-	
-	USART2->BRR = 0x0683;			// 9600 @16mHZ
-	USART2->CR1 = 0x0008;			// Enable Tx
-	USART2->CR1 |= 0x2000;		// Enable UART
-}
-
-void USART_write(int ch)
-{
-	// Wait while Tx buffer is empty
-	while(!(USART2->SR & 0x0080))  
-	{
-		USART2->DR = (ch & 0xFF);
-	}
-}
-
-void delayMs(int delay)
-{
-	int i;
-	for(;delay>0;delay--)
-	{
-		for(i=0;i<3195;i++);
-	}
+	return 0;
 }
